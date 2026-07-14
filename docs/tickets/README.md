@@ -10,15 +10,17 @@ acceptance criteria and dependencies. Intent lives in [`../spec.md`](../spec.md)
 |---|---|---|
 | E1 Foundation | [e1-foundation.md](e1-foundation.md) | Ready |
 | E2 Auth & profiles | [e2-auth-profiles.md](e2-auth-profiles.md) | Ready |
-| E3 Item system & unfurl | — | Ready (search adapter cut — see below) |
-| E4 Composer | — | Ready to draft; publish sub-tickets gated on S2 |
-| E5 Publish & share assets | — | Blocked: client-render fidelity spike (S2) |
-| E6 Remix & lineage | — | Not yet drafted (depends on E4/E5) |
-| E7 Feed & votes | — | Not yet drafted |
-| E8 Dedication/send | — | Not yet drafted |
+| E3 Item system & unfurl | [e3-item-unfurl.md](e3-item-unfurl.md) | Ready (search adapter cut) |
+| E4 Composer | [e4-composer.md](e4-composer.md) | Ready; publish sub-tickets gated on S2 |
+| E5 Publish & share assets | [e5-publish-share.md](e5-publish-share.md) | Gated on spike S2 |
+| E6 Remix & lineage | [e6-remix-lineage.md](e6-remix-lineage.md) | Ready (depends on E4/E5) |
+| E7 Feed & votes | [e7-feed-votes.md](e7-feed-votes.md) | Ready (depends on E5) |
+| E8 Dedication/send | [e8-dedication-send.md](e8-dedication-send.md) | Ready (depends on E4/E5) |
 | E9 Moderation & guardrails | [e9-moderation.md](e9-moderation.md) | Ready |
-| E10 Seed content ops | — | Not yet drafted |
-| E11 Growth hooks | — | Mostly folded into E4 (share-sheet is now a core input) |
+| E10 Seed content ops | — | Deferred (ops/content, post-core-loop) |
+| E11 Growth hooks | — | Share-sheet → E4-T5; rest deferred |
+
+**MVP critical path:** E1 → (E2 ∥ E3) → E4 → S2 → E5 → E6 → E7 → E8.
 
 ## Scope change (2026-07-14): no federated search in v1
 
