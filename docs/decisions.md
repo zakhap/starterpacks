@@ -61,6 +61,23 @@ artifact; deltas live here.
   week 1 on remix-rate would look falsely broken. Remix-rate (target ~70%) is a later
   metric once Tier-2/Tier-4 remix-bait packs are in circulation.
 
+## 2026-07-14 — Cut federated search from v1
+
+**No federated / product search in v1.** Composer input modes reduce to **paste** and
+**shelf** (spec 7.3 minus the search tray). This kills the S1 product-search-vendor spike
+as a v1 blocker (the hardest unresolved dependency — no clean cheap option under D4).
+
+Consequences:
+- **The share-sheet capture is promoted from a growth hook (E11) to a core composer input.**
+  With search gone, it is the primary way mobile users get an item they didn't paste. It
+  must ship in the composer timeframe (E4), not as a later add-on.
+- **Residual friction (watch in testing):** to add a thing not already open in another app,
+  a mobile user must leave Packrat, find it, and share it back — the exact friction search
+  removed. If this hurts adoption, search returns in v1.1 and S1 runs then.
+- Desktop (paste) and shelf (reuse) unaffected. E3 unfurl still needed for pasted/shared
+  links; only the *product-search adapter* is dropped. Spotify/YouTube handled via their
+  own unfurl, not a search index.
+
 ## 2026-07-14 — Accepted bets (flagged, deliberately not designed for v1)
 
 - **Inbound / return loop is unspecified.** The design optimizes outbound virality (the
