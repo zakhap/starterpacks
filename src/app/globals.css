@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   Packrat — zine/collage design system
+   warm paper · poster-condensed titles · taped rotated cards · vermilion accent
+   =========================================================================== */
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-highlight: var(--highlight);
+  --color-line: var(--line);
+
+  --font-display: var(--font-anton);
+  --font-sans: var(--font-bricolage);
+  --font-note: var(--font-fraunces);
+}
+
+:root {
+  --paper: #f2ede1;
+  --paper-2: #e9e2d2;
+  --ink: #1c1712;
+  --ink-soft: #6b6154;
+  --accent: #e83f1d;
+  --accent-ink: #fff6f0;
+  --highlight: #ffd23e;
+  --line: #d8cfbc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17130f;
+    --paper-2: #211b15;
+    --ink: #f3ecdd;
+    --ink-soft: #a89a86;
+    --accent: #ff5233;
+    --accent-ink: #1a0f0a;
+    --highlight: #ffce3a;
+    --line: #352c22;
+  }
+}
+:root[data-theme="light"] {
+  --paper: #f2ede1; --paper-2: #e9e2d2; --ink: #1c1712; --ink-soft: #6b6154;
+  --accent: #e83f1d; --accent-ink: #fff6f0; --highlight: #ffd23e; --line: #d8cfbc;
+}
+:root[data-theme="dark"] {
+  --paper: #17130f; --paper-2: #211b15; --ink: #f3ecdd; --ink-soft: #a89a86;
+  --accent: #ff5233; --accent-ink: #1a0f0a; --highlight: #ffce3a; --line: #352c22;
+}
+
+html { height: 100%; }
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  background-image:
+    radial-gradient(circle at 15% 8%, color-mix(in srgb, var(--highlight) 8%, transparent), transparent 42%),
+    radial-gradient(circle at 88% 92%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 40%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+
+/* ---------- type ---------- */
+.font-display { font-family: var(--font-anton), Impact, sans-serif; letter-spacing: 0.01em; }
+.font-note { font-family: var(--font-fraunces), Georgia, serif; }
+
+.poster-title {
+  font-family: var(--font-anton), Impact, sans-serif;
+  text-transform: uppercase;
+  line-height: 0.92;
+  letter-spacing: 0.005em;
+}
+
+/* ---------- collage primitives ---------- */
+.tape-shadow { box-shadow: 4px 4px 0 0 var(--ink); }
+.tape-shadow-sm { box-shadow: 2px 2px 0 0 var(--ink); }
+.tape-shadow-accent { box-shadow: 4px 4px 0 0 var(--accent); }
+
+.ink-border { border: 1.5px solid var(--ink); }
+
+.tape {
+  position: absolute;
+  height: 22px;
+  background: color-mix(in srgb, var(--highlight) 80%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent);
+  opacity: 0.9;
+}
+
+.rot-1 { transform: rotate(-1.4deg); }
+.rot-2 { transform: rotate(1.8deg); }
+.rot-3 { transform: rotate(-0.8deg); }
+.rot-4 { transform: rotate(2.4deg); }
+
+/* ---------- buttons ---------- */
+.btn {
+  font-family: var(--font-bricolage), sans-serif;
+  font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 0 var(--ink);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+}
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 var(--ink); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--ink); }
+.btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--ink); }
+.btn-lg { padding: 0.85rem 1.5rem; font-size: 0.95rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: 3px 3px 0 0 var(--ink); transform: none; }
+
+/* ---------- misc ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  background: var(--ink); color: var(--paper);
+  border-radius: 2px;
+}
+.chip {
+  border: 1.5px solid var(--ink); background: var(--paper);
+  padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; border-radius: 999px;
+}
+
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+.thin-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+
+@keyframes plop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.animate-plop { animation: plop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }

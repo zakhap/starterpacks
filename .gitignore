@@ -32,3 +32,11 @@ yarn-error.log*
 # Test / coverage
 coverage/
 .turbo/
+
+# Local uploads (dev storage driver)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Test artifacts
+.playwright-mcp/
+*.jpeg

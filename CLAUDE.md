@@ -2,13 +2,12 @@
 
 Guidance for AI agents working in this repo. Read [`docs/spec.md`](docs/spec.md) and
 [`docs/decisions.md`](docs/decisions.md) before making product or architecture choices.
-**`decisions.md` is authoritative** where it conflicts with the spec.
+**`decisions.md` is authoritative** where it conflicts with the spec. Tickets: [`docs/tickets/`](docs/tickets/).
 
 ## What this is
 
 Packrat: a platform for making/remixing/sending **packs** (titled 6–9 item collages;
 each item = a real link + one-line liner note). "Cultural mixtape," not Linktree.
-Pre-build — currently just docs.
 
 ## Locked decisions — do not silently reverse (spec §2)
 
@@ -20,48 +19,41 @@ If one seems wrong, **flag it in review** — don't just change it.
 
 ## Vocabulary (use in code, UI, copy — spec §3)
 
-**Pack** (the object) · **Item** (canonical, URL-deduped link object) · **Liner note**
-(one-line annotation) · **Plop** (add item to canvas) · **Remix** (inherit + change ≥1 +
-republish) · **Lineage** (remix ancestry) · **Dedication/Send** (addressed pack) ·
-**Shelf** (saved items / profile's packs) · **Drop** (scheduled platform pack). Never
-"fork," never "mixtape" as the object name, never "link" in the product name.
+**Pack** · **Item** (canonical, URL-deduped) · **Liner note** · **Plop** (add item) ·
+**Remix** (inherit + change ≥1 + republish) · **Lineage** · **Dedication/Send** · **Shelf** ·
+**Drop**. Never "fork," never "mixtape" as the object name, never "link" in the product name.
 
 ## Resolved specifics (decisions.md)
 
 - Name: **Packrat** (domain/TM pending).
-- Item-tap on a pack page = expand liner note + actions; "open link" is a small secondary action.
-- Platform = **PWA** for v1; native is a fast-follow.
-- Handles/URLs = `/@user/pack-slug`.
-- Share images: **render client-side** on save → WebP → upload to **R2** → OG points at it.
+- Item-tap on a pack page = expand liner note + actions; "open link" is secondary.
+- Platform = **PWA** for v1; native fast-follow. Handles/URLs = `/@user/pack-slug`.
+- Share images: **render client-side** → WebP → upload (R2 in prod) → OG points at it.
   Publish blocks on upload (crawlers don't run JS). Do NOT depend on satori for fidelity.
-- **No Docker** in v1 — Railway native buildpack. Add Docker only for Fly.io or headless
-  Chromium in the unfurl worker.
-- Clipboard hook = **share-sheet target**, not clipboard poll (iOS Safari can't auto-read).
+- **No Docker** in v1 — Railway native buildpack.
+- Composer input = **paste + shelf + share-sheet** (federated search CUT from v1).
 - Week-1 metric = shares AND makes (co-primary), not remix-rate.
 
-## Stack (spec §9)
+## Stack
 
-Next.js (App Router) on Railway · Supabase (Postgres + auth, RLS) · Cloudflare + R2 in
-front · unfurl worker = 2nd Railway service, Postgres jobs table w/ `FOR UPDATE SKIP
-LOCKED` (no Redis/SQS yet). **Portability discipline (§9.4):** no Vercel-proprietary
-primitives; Supabase as "Postgres + auth" only; no Cloudflare-D1, no Firebase, no
-microservices. Data model sketch: spec §9.6.
+**Prod target (spec §9):** Next.js (App Router) on Railway · Supabase (Postgres+auth) ·
+Cloudflare + R2 · unfurl worker = 2nd Railway service.
+**This repo, as built:** Next.js 16 / React 19 / Tailwind 4 / TypeScript / Bun ·
+Drizzle ORM → **local Postgres** (`postgres.js`) · cookie-session **dev auth** (swap for
+Supabase social login at deploy) · pluggable **storage** (local disk in dev → R2 in prod) ·
+unfurl worker script under `src/worker`. Portability discipline §9.4: no proprietary primitives.
+
+## Local dev
+
+- Postgres runs locally on :5432. Set `DATABASE_URL` in `.env.local` (see `.env.example`).
+- `bun run db:push` — apply schema · `bun run db:seed` — seed packs · `bun run dev` — app ·
+  `bun run worker` — unfurl/re-unfurl worker (optional; paste path unfurls inline too).
 
 ## Engineering priorities
 
-- **Unfurl quality is the whole product (§9.5)** — every pasted link (Spotify, product,
-  YouTube) must return a handsome card in <1s, with an intentional fallback card. Its own epic (E3).
-- **60-second remix budget (§7.8)** is the acceptance test for the composer (E4).
+- **Unfurl quality is the whole product (§9.5)** — handsome card in <1s, intentional fallback (E3).
+- **60-second remix budget (§7.8)** is the composer acceptance test (E4).
 
-## Needs a spike before its epic is estimated
+## Out of scope for v1 (spec §8)
 
-- **Product-search vendor** (gates E4 composer) — no clean cheap option under D4 (no
-  affiliate). Spike before scoping. Spotify/YouTube search are fine; product search is unsolved.
-- **Client-render fidelity** (E5) — prove a rotated/overlapping 9-item pack renders +
-  uploads + serves to crawlers cleanly.
-- **Archetype↔real-person collision (D6)** — seed pack #6 maps onto collab target Oren John; check/reframe.
-
-## Working agreements
-
-- Don't build Docker, a recommender feed, comments, or any monetization in v1 (out of scope, spec §8).
-- Epics E1–E11: spec §12.
+No Docker, no recommender feed, no comments, no monetization, no federated search.
