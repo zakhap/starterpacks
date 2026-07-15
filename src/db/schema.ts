@@ -3,7 +3,6 @@ import {
   text,
   integer,
   real,
-  boolean,
   jsonb,
   timestamp,
   uniqueIndex,
@@ -11,40 +10,11 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
-// --- Enum-ish string unions (kept as text + $type to avoid enum migration friction) ---
-export type SourceType =
-  | "product"
-  | "song"
-  | "video"
-  | "book"
-  | "place"
-  | "other";
-export type PackStatus = "draft" | "published" | "taken_down";
+// Super-simple model: no accounts, no auth, no votes. A pack is an immutable, shareable
+// artifact. You make one → get a link → anyone can fork it. That's the whole thing.
+
+export type SourceType = "product" | "song" | "video" | "book" | "place" | "other";
 export type UnfurlStatus = "pending" | "done" | "failed";
-
-// --- users ---
-export const users = pgTable(
-  "users",
-  {
-    id: text("id").primaryKey(),
-    handle: text("handle").notNull(), // stored lowercase; URL is /@handle
-    displayName: text("display_name"),
-    avatarUrl: text("avatar_url"),
-    isAdmin: boolean("is_admin").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("users_handle_unique").on(t.handle)],
-);
-
-// --- sessions (dev cookie auth; swapped for Supabase in prod) ---
-export const sessions = pgTable("sessions", {
-  id: text("id").primaryKey(), // opaque token stored in cookie
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-});
 
 // --- items: canonical, URL-deduped link objects ---
 export const items = pgTable(
@@ -64,47 +34,36 @@ export const items = pgTable(
   (t) => [uniqueIndex("items_canonical_url_unique").on(t.canonicalUrl)],
 );
 
-// --- packs ---
+// --- packs: the artifact ---
 export const packs = pgTable(
   "packs",
   {
     id: text("id").primaryKey(),
-    authorId: text("author_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default(""),
-    slug: text("slug").notNull(),
-    status: text("status").$type<PackStatus>().notNull().default("draft"),
+    slug: text("slug").notNull(), // globally unique, the shareable path /p/<slug>
+    authorName: text("author_name"), // optional signature, no account
 
-    // lineage (D3): direct parent + denormalized root/depth for cheap display (§9.6)
+    // fork lineage: direct parent + denormalized root/depth for cheap display
     remixParentId: text("remix_parent_id"),
     rootPackId: text("root_pack_id"),
     generationDepth: integer("generation_depth").notNull().default(0),
 
-    // dedication (D2): recipient handle/name + optional on-platform user
+    // optional "made for ___" label (just a caption; no recipient account)
     dedicationRecipient: text("dedication_recipient"),
-    dedicationRecipientUserId: text("dedication_recipient_user_id"),
-    dedicationReadAt: timestamp("dedication_read_at", { withTimezone: true }),
 
-    // canvas-level config (per-item layout lives on pack_items). §9.6 JSONB.
     canvasLayout: jsonb("canvas_layout").$type<{ background?: string }>(),
 
-    // share assets (D7) — rendered client-side, stored in R2/local
+    // share assets — rendered client-side, stored in R2/local
     shareImage9x16: text("share_image_9x16"),
     shareImage1x1: text("share_image_1x1"),
 
-    // counter caches
-    upvotes: integer("upvotes").notNull().default(0),
-    downvotes: integer("downvotes").notNull().default(0),
     remixCount: integer("remix_count").notNull().default(0),
 
-    publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("packs_author_slug_unique").on(t.authorId, t.slug),
-    index("packs_status_published_idx").on(t.status, t.publishedAt),
+    uniqueIndex("packs_slug_unique").on(t.slug),
+    index("packs_created_idx").on(t.createdAt),
     index("packs_remix_parent_idx").on(t.remixParentId),
   ],
 );
@@ -121,58 +80,27 @@ export const packItems = pgTable(
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
     linerNote: text("liner_note"),
-    // freeform-canvas layout (§7.4) — normalized 0..1 x/y, scale, degrees
     x: real("x").notNull().default(0.5),
     y: real("y").notNull().default(0.5),
     scale: real("scale").notNull().default(1),
     rotation: real("rotation").notNull().default(0),
     zIndex: integer("z_index").notNull().default(0),
-    inherited: boolean("inherited").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("pack_items_pack_idx").on(t.packId)],
 );
 
-// --- votes ---
-export const votes = pgTable(
-  "votes",
-  {
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    packId: text("pack_id")
-      .notNull()
-      .references(() => packs.id, { onDelete: "cascade" }),
-    value: integer("value").notNull(), // +1 / -1
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("votes_user_pack_unique").on(t.userId, t.packId)],
-);
-
-// --- unfurl_jobs: worker queue (FOR UPDATE SKIP LOCKED) ---
+// --- unfurl_jobs: worker queue (optional; paste path unfurls inline) ---
 export const unfurlJobs = pgTable("unfurl_jobs", {
   id: text("id").primaryKey(),
-  url: text("url").notNull(), // canonical url
+  url: text("url").notNull(),
   status: text("status").$type<UnfurlStatus>().notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// --- reports (E9 moderation) ---
-export const reports = pgTable("reports", {
-  id: text("id").primaryKey(),
-  reporterId: text("reporter_id").references(() => users.id, { onDelete: "set null" }),
-  packId: text("pack_id").references(() => packs.id, { onDelete: "cascade" }),
-  itemId: text("item_id").references(() => items.id, { onDelete: "set null" }),
-  reason: text("reason").notNull(),
-  status: text("status").notNull().default("open"), // open | actioned | dismissed
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// --- relations (for drizzle query API) ---
 export const packsRelations = relations(packs, ({ one, many }) => ({
-  author: one(users, { fields: [packs.authorId], references: [users.id] }),
   items: many(packItems),
   parent: one(packs, {
     fields: [packs.remixParentId],
@@ -186,11 +114,6 @@ export const packItemsRelations = relations(packItems, ({ one }) => ({
   item: one(items, { fields: [packItems.itemId], references: [items.id] }),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
-  packs: many(packs),
-}));
-
-export type User = typeof users.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type Pack = typeof packs.$inferSelect;
 export type PackItem = typeof packItems.$inferSelect;

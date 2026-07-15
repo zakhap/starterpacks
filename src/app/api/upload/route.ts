@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
 import { putImage } from "@/lib/storage";
 import { newId } from "@/lib/ids";
 
-// Store a rendered share image (E5-T2). dev=local disk, prod=R2 (same interface).
+// Store a rendered share image. dev=local disk, prod=R2 (same interface).
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-
   const form = await req.formData();
   const file = form.get("file");
   const kind = String(form.get("kind") ?? "img"); // "9x16" | "1x1"

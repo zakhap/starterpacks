@@ -6,16 +6,22 @@ Guidance for AI agents working in this repo. Read [`docs/spec.md`](docs/spec.md)
 
 ## What this is
 
-Packrat: a platform for making/remixing/sending **packs** (titled 6–9 item collages;
-each item = a real link + one-line liner note). "Cultural mixtape," not Linktree.
+Packrat: make a **pack** (titled 6–9 item collage; each item = a real link + one-line liner
+note) → get a shareable link → anyone can **fork** it. A shareable static artifact, **link-in-bio
+style** — NOT a social platform. See the 2026-07-15 PIVOT entry in decisions.md (authoritative).
 
-## Locked decisions — do not silently reverse (spec §2)
+## Current model — the simple version (decisions.md 2026-07-15 pivot)
 
-D1 pack (not profile) is the viral unit · D2 content not utility · D3 "Remix" not "fork,"
-lineage is the graph · D4 no monetization in v1 · D5 remix-first (~70%) · D6 archetypes
-unnamed / named packs only self-published · D7 canvas *is* the share asset.
+- **No auth, no accounts.** Optional `authorName` label only. No users/sessions/votes/profiles.
+- **No edit after publish** — packs are immutable; fork to change one.
+- **No server drafts** — composer is client-side (localStorage); `POST /api/packs` writes once.
+- **Permalinks `/p/<slug>`.** The permalink + OG/share-image is ~95% of the product.
+- Fork + lineage kept; verb is "Fork". Data model = 4 tables: items, packs, pack_items, unfurl_jobs.
+- Distribution is off-platform (paste the link in a text or bio). No in-app engagement loop.
 
-If one seems wrong, **flag it in review** — don't just change it.
+Spec.md's D1–D7 are largely **superseded** by this pivot — treat spec.md as historical context,
+decisions.md as current truth. Don't reintroduce auth, votes, profiles, or edit-after-publish
+without the user asking.
 
 ## Vocabulary (use in code, UI, copy — spec §3)
 
@@ -27,7 +33,7 @@ If one seems wrong, **flag it in review** — don't just change it.
 
 - Name: **Packrat** (domain/TM pending).
 - Item-tap on a pack page = expand liner note + actions; "open link" is secondary.
-- Platform = **PWA** for v1; native fast-follow. Handles/URLs = `/@user/pack-slug`.
+- Platform = **PWA** for v1; native fast-follow. URLs = `/p/<slug>` (no accounts → no `/@handle`).
 - Share images: **render client-side** → WebP → upload (R2 in prod) → OG points at it.
   Publish blocks on upload (crawlers don't run JS). Do NOT depend on satori for fidelity.
 - **No Docker** in v1 — Railway native buildpack.
@@ -39,9 +45,10 @@ If one seems wrong, **flag it in review** — don't just change it.
 **Prod target (spec §9):** Next.js (App Router) on Railway · Supabase (Postgres+auth) ·
 Cloudflare + R2 · unfurl worker = 2nd Railway service.
 **This repo, as built:** Next.js 16 / React 19 / Tailwind 4 / TypeScript / Bun ·
-Drizzle ORM → **local Postgres** (`postgres.js`) · cookie-session **dev auth** (swap for
-Supabase social login at deploy) · pluggable **storage** (local disk in dev → R2 in prod) ·
-unfurl worker script under `src/worker`. Portability discipline §9.4: no proprietary primitives.
+Drizzle ORM → **local Postgres** (`postgres.js`) · **no auth** (optional authorName only) ·
+client-side composer (localStorage) → one-shot `POST /api/packs` · pluggable **storage** (local
+disk in dev → R2 in prod) · unfurl worker under `src/worker` · same-origin image proxy
+(`/api/img`) so the client share-render doesn't taint on cross-origin images.
 
 ## Local dev
 

@@ -1,34 +1,25 @@
 import type { CanvasItemView } from "@/lib/types";
 import { PackCanvas } from "./PackCanvas";
 
-// Fixed-pixel composition rendered to the share image (E5-T1). The canvas IS the asset
-// (D7); this just frames it with the title + branding for 9:16 / 1:1 export. Rendered
-// offscreen by the composer, captured with html-to-image.
+// Fixed-pixel composition rendered to the share image. The canvas IS the asset; this
+// frames it with the title + branding for 9:16 / 1:1 export.
 export function ShareFrame({
   title,
-  handle,
+  authorName,
   dedicationRecipient,
   items,
   width,
   height,
 }: {
   title: string;
-  handle: string;
+  authorName?: string | null;
   dedicationRecipient?: string | null;
   items: CanvasItemView[];
   width: number;
   height: number;
 }) {
   return (
-    <div
-      className="flex flex-col bg-paper"
-      style={{
-        width,
-        height,
-        backgroundColor: "var(--paper)",
-        color: "var(--ink)",
-      }}
-    >
+    <div className="flex flex-col bg-paper" style={{ width, height, backgroundColor: "var(--paper)", color: "var(--ink)" }}>
       <div className="border-b-[3px] border-ink px-8 pb-5 pt-7">
         {dedicationRecipient ? (
           <p className="font-note text-2xl italic text-accent">for {dedicationRecipient}</p>
@@ -42,7 +33,9 @@ export function ShareFrame({
       </div>
       <div className="flex items-center justify-between border-t-[3px] border-ink px-8 py-4">
         <span className="poster-title text-3xl">PACKRAT</span>
-        <span className="text-xl font-semibold text-ink-soft">@{handle} · remix it</span>
+        <span className="text-xl font-semibold text-ink-soft">
+          {authorName ? `by ${authorName} · ` : ""}fork it
+        </span>
       </div>
     </div>
   );

@@ -78,6 +78,31 @@ Consequences:
   links; only the *product-search adapter* is dropped. Spotify/YouTube handled via their
   own unfurl, not a search index.
 
+## 2026-07-15 — PIVOT: link-in-bio simplicity (supersedes several D1–D7 bets)
+
+Direction change after using the built MVP. **Packrat is a shareable static artifact, not a
+social platform.** You make a pack → get a link → share it anywhere (text, bio) → anyone can
+fork it. Distribution is off-platform; there is no in-app engagement loop. This reverses the
+spec's "not link-in-bio" framing (old D2) — it *is* link-in-bio, just meme-native + forkable.
+
+Concrete rules (these win over spec.md and earlier entries):
+- **No auth, no accounts, ever.** Optional free-text `authorName` on a pack ("by mara") — a
+  signature, not a login. No users, no sessions.
+- **No edit after publish.** A pack is immutable once made. Forking is how you change one.
+- **No server-side drafts.** The composer is client-side (localStorage); publishing writes the
+  pack once via `POST /api/packs`.
+- **Permalinks are `/p/<slug>`** (globally-unique slug). Dropped `/@handle/slug` and profiles.
+- **Removed entirely:** login/sessions/users, votes, profiles, the moderation `reports` table,
+  the dedication *recipient/inbox* concept (kept only as an optional "for ___" caption).
+- **Kept:** make · the `/p/<slug>` permalink with airtight OG/share-image (this is ~95% of the
+  product — most viewers never sign in) · fork + lineage (recursive CTE, fork counter) · a
+  simple recent-packs gallery to fork from · client-side share-image render → storage.
+- **Verb:** UI still says "Fork" now (user's word). The old "Remix, never fork" (D3) is dropped.
+- **Data model** collapsed to 4 tables: `items`, `packs`, `pack_items`, `unfurl_jobs`.
+
+Open/next per the user: get real hosting later so the links are actually persistent (the whole
+point of a bio link). Still local-only for now.
+
 ## 2026-07-15 — More resolutions
 
 - **Sent packs are public immediately** (E8-T2). A dedication publishes to the feed the moment

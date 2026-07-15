@@ -1,10 +1,7 @@
-// Seed a handful of published packs so the feed, lineage, dedication, and item-dedupe
-// all demo out of the box. Run: bun run db:seed
-import { eq } from "drizzle-orm";
-import { db, users, packs, packItems } from "@/db";
-import { newId } from "@/lib/ids";
+// Seed a handful of packs so the gallery, lineage, and dedication demo out of the box.
+// No users — packs carry an optional author name. Run: bun run db:seed
 import { getOrCreateItem } from "@/lib/items";
-import { createDraft, saveDraft, publish, type CanvasItem } from "@/lib/packs";
+import { createPack, type CanvasItem, type Pack } from "@/lib/packs";
 
 const SLOTS = [
   { x: 0.28, y: 0.3, r: -5 },
@@ -15,25 +12,11 @@ const SLOTS = [
   { x: 0.5, y: 0.85, r: 3 },
 ];
 
-async function ensureUser(handle: string) {
-  const existing = (await db.select().from(users).where(eq(users.handle, handle)).limit(1))[0];
-  if (existing) return existing;
-  return (
-    await db.insert(users).values({ id: newId("u"), handle, displayName: handle }).returning()
-  )[0];
-}
-
 async function buildPack(
-  authorId: string,
+  authorName: string | null,
   opts: { title: string; dedication?: string; remixParentId?: string },
   specs: { url: string; note: string }[],
-) {
-  const draft = await createDraft(authorId, {
-    title: opts.title,
-    remixParentId: opts.remixParentId,
-    dedicationRecipient: opts.dedication,
-  });
-
+): Promise<Pack> {
   const canvas: CanvasItem[] = [];
   for (let i = 0; i < specs.length; i++) {
     const item = await getOrCreateItem(specs[i].url);
@@ -46,27 +29,25 @@ async function buildPack(
       scale: 1 + ((i % 3) - 1) * 0.1,
       rotation: slot.r,
       zIndex: i + 1,
-      inherited: false,
     });
     process.stdout.write(`  · ${item.title ?? item.domain}\n`);
   }
-  await saveDraft(authorId, draft.id, { title: opts.title, items: canvas });
-  const published = await publish(authorId, draft.id);
-  console.log(`✓ "${opts.title}" (@${(await handleOf(authorId))})  /${published.slug}`);
-  return published;
-}
-
-async function handleOf(userId: string) {
-  return (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]?.handle;
+  const pack = await createPack({
+    title: opts.title,
+    authorName,
+    dedicationRecipient: opts.dedication ?? null,
+    remixParentId: opts.remixParentId ?? null,
+    items: canvas,
+  });
+  console.log(`✓ "${opts.title}"  /p/${pack.slug}`);
+  return pack;
 }
 
 async function main() {
   console.log("Seeding Packrat…\n");
-  const mara = await ensureUser("mara");
-  const rat = await ensureUser("packrat");
 
   const perfMale = await buildPack(
-    mara.id,
+    "mara",
     { title: "The performative male starter pack" },
     [
       { url: "https://en.wikipedia.org/wiki/Matcha", note: "iced. oat. extra ceremonial." },
@@ -78,9 +59,8 @@ async function main() {
     ],
   );
 
-  // a remix that "fixes" the planted wrong item (5.1) — demonstrates lineage + ≥1 change
   await buildPack(
-    rat.id,
+    "you",
     { title: "The performative male starter pack (corrected)", remixParentId: perfMale.id },
     [
       { url: "https://en.wikipedia.org/wiki/Matcha", note: "iced. oat. extra ceremonial." },
@@ -92,7 +72,7 @@ async function main() {
   );
 
   await buildPack(
-    mara.id,
+    "mara",
     { title: "The reformer pilates is her whole personality starter pack" },
     [
       { url: "https://en.wikipedia.org/wiki/Pilates", note: "the reformer is the personality now." },
@@ -104,7 +84,7 @@ async function main() {
   );
 
   await buildPack(
-    rat.id,
+    null,
     { title: "The just discovered woodworking guy starter pack" },
     [
       { url: "https://en.wikipedia.org/wiki/Woodworking", note: "it's a lifestyle now." },
@@ -116,19 +96,7 @@ async function main() {
   );
 
   await buildPack(
-    mara.id,
-    { title: "The capybara-core unbothered summer starter pack" },
-    [
-      { url: "https://en.wikipedia.org/wiki/Capybara", note: "the patron saint of calm." },
-      { url: "https://en.wikipedia.org/wiki/Hot_spring", note: "with a yuzu floating in it." },
-      { url: "https://en.wikipedia.org/wiki/Hammock", note: "horizontal all summer." },
-      { url: "https://en.wikipedia.org/wiki/Matcha", note: "unbothered fuel." },
-      { url: "https://en.wikipedia.org/wiki/Yuzu", note: "citrus, spa-coded." },
-    ],
-  );
-
-  await buildPack(
-    rat.id,
+    "packrat",
     { title: "The getting over him starter pack", dedication: "whoever needs it" },
     [
       { url: "https://en.wikipedia.org/wiki/Dreams_(Fleetwood_Mac_song)", note: "on loop. loudly." },
@@ -139,7 +107,7 @@ async function main() {
     ],
   );
 
-  console.log("\nDone. Visit / to see the feed.");
+  console.log("\nDone. Visit / to see the gallery.");
   process.exit(0);
 }
 

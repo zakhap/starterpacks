@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CanvasItemView, ItemView, PackView } from "@/lib/types";
+import type { CanvasItemView, ItemView } from "@/lib/types";
 import { ItemCard } from "@/components/ItemCard";
 import { ShareFrame } from "@/components/ShareFrame";
 import { isProbablyUrl } from "@/lib/url";
@@ -20,7 +20,6 @@ const GHOSTS = [
   "she has a Notion for everything",
 ];
 
-// loose-collage seed placements (fractions), cycled as items are added
 const SLOTS: { x: number; y: number; r: number }[] = [
   { x: 0.28, y: 0.3, r: -5 },
   { x: 0.7, y: 0.26, r: 6 },
@@ -33,193 +32,172 @@ const SLOTS: { x: number; y: number; r: number }[] = [
   { x: 0.18, y: 0.46, r: -4 },
 ];
 
-type CItem = CanvasItemView & { pending?: boolean; tempId?: string };
+type CItem = CanvasItemView & { pending?: boolean; tempId?: string; inherited?: boolean };
 
 export function ComposerClient({
-  initialPack,
-  shelf,
-  isRemix,
-  isDedication,
+  forkOf,
+  initialTitle,
+  initialItems,
+  initialAddUrl,
 }: {
-  initialPack: PackView;
-  shelf: ItemView[];
-  isRemix: boolean;
-  isDedication: boolean;
+  forkOf: string | null;
+  initialTitle: string;
+  initialItems: CanvasItemView[];
+  initialAddUrl: string | null;
 }) {
   const router = useRouter();
-  const [title, setTitle] = useState(initialPack.title);
-  const [recipient, setRecipient] = useState(initialPack.dedicationRecipient ?? "");
-  const [items, setItems] = useState<CItem[]>(initialPack.items);
+  const storageKey = forkOf ? `packrat-draft:fork:${forkOf}` : "packrat-draft:new";
+
+  const [title, setTitle] = useState(initialTitle);
+  const [authorName, setAuthorName] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [items, setItems] = useState<CItem[]>(
+    initialItems.map((i) => ({ ...i, inherited: Boolean(forkOf) })),
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState("");
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [ghostIdx, setGhostIdx] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const frame916 = useRef<HTMLDivElement>(null);
   const frame11 = useRef<HTMLDivElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // rotating ghost suggestion
   useEffect(() => {
     const t = setInterval(() => setGhostIdx((i) => (i + 1) % GHOSTS.length), 2600);
     return () => clearInterval(t);
   }, []);
 
-  // ---------- autosave ----------
-  const scheduleSave = useCallback(
-    (next?: { title?: string; recipient?: string; items?: CItem[] }) => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(async () => {
-        const t = next?.title ?? title;
-        const r = next?.recipient ?? recipient;
-        const its = next?.items ?? items;
-        const payload = its
-          .filter((i) => !i.pending)
-          .map((i, idx) => ({
-            itemId: i.itemId,
-            linerNote: i.linerNote,
-            x: i.x,
-            y: i.y,
-            scale: i.scale,
-            rotation: i.rotation,
-            zIndex: i.zIndex || idx,
-            inherited: i.inherited,
-          }));
-        setStatus("saving…");
-        try {
-          await fetch(`/api/packs/${initialPack.id}`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              title: t,
-              dedicationRecipient: isDedication ? r : null,
-              items: payload,
-            }),
-          });
-          setStatus("saved");
-        } catch {
-          setStatus("save failed");
+  // restore from localStorage on mount (blank compose only; fork/add come from the URL)
+  useEffect(() => {
+    if (!forkOf && !initialAddUrl) {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.title) setTitle(d.title);
+          if (d.authorName) setAuthorName(d.authorName);
+          if (d.recipient) setRecipient(d.recipient);
+          if (Array.isArray(d.items) && d.items.length) setItems(d.items);
         }
-      }, 700);
-    },
-    [title, recipient, items, initialPack.id, isDedication],
-  );
+      } catch {}
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  function mutate(next: CItem[]) {
-    setItems(next);
-    scheduleSave({ items: next });
-  }
+  // persist to localStorage
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ title, authorName, recipient, items: items.filter((i) => !i.pending) }),
+      );
+    } catch {}
+  }, [title, authorName, recipient, items, hydrated, storageKey]);
 
   // ---------- add / plop ----------
-  const addFromItemView = useCallback(
-    (item: ItemView) => {
-      setItems((prev) => {
-        if (prev.length >= MAX_ITEMS) {
-          setStatus(`9 is the cap — that's the whole point`);
-          return prev;
-        }
-        const slot = SLOTS[prev.length % SLOTS.length];
-        const maxZ = prev.reduce((m, i) => Math.max(m, i.zIndex), 0);
-        const next: CItem[] = [
-          ...prev,
-          {
-            itemId: item.id,
-            item,
-            linerNote: null,
-            x: slot.x,
-            y: slot.y,
-            scale: 1,
-            rotation: slot.r,
-            zIndex: maxZ + 1,
-            inherited: false,
-          },
-        ];
-        scheduleSave({ items: next });
-        return next;
-      });
-    },
-    [scheduleSave],
-  );
+  const addFromItem = useCallback((item: ItemView) => {
+    setItems((prev) => {
+      if (prev.length >= MAX_ITEMS) {
+        setStatus("9 is the cap — that's the whole point");
+        return prev;
+      }
+      const slot = SLOTS[prev.length % SLOTS.length];
+      const maxZ = prev.reduce((m, i) => Math.max(m, i.zIndex), 0);
+      return [
+        ...prev,
+        {
+          itemId: item.id,
+          item,
+          linerNote: null,
+          x: slot.x,
+          y: slot.y,
+          scale: 1,
+          rotation: slot.r,
+          zIndex: maxZ + 1,
+        },
+      ];
+    });
+  }, []);
 
-  const addLink = useCallback(
-    async (rawUrl: string) => {
-      const url = rawUrl.trim();
-      if (!isProbablyUrl(url)) {
-        setStatus("that doesn't look like a link");
+  const addLink = useCallback(async (rawUrl: string) => {
+    const url = rawUrl.trim();
+    if (!isProbablyUrl(url)) {
+      setStatus("that doesn't look like a link");
+      return;
+    }
+    const tempId = "tmp_" + Math.abs(hashStr(url + Math.floor(performance.now())));
+    setItems((prev) => {
+      if (prev.length >= MAX_ITEMS) {
+        setStatus("9 is the cap");
+        return prev;
+      }
+      const slot = SLOTS[prev.length % SLOTS.length];
+      const maxZ = prev.reduce((m, i) => Math.max(m, i.zIndex), 0);
+      const domain = safeDomain(url);
+      return [
+        ...prev,
+        {
+          itemId: tempId,
+          tempId,
+          pending: true,
+          item: {
+            id: tempId,
+            canonicalUrl: url,
+            title: domain,
+            imageUrl: null,
+            domain,
+            sourceType: "other",
+            unfurlStatus: "pending",
+          },
+          linerNote: null,
+          x: slot.x,
+          y: slot.y,
+          scale: 1,
+          rotation: slot.r,
+          zIndex: maxZ + 1,
+        },
+      ];
+    });
+    setLinkInput("");
+    try {
+      const res = await fetch("/api/items/unfurl", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = (await res.json()) as { item?: ItemView; error?: string };
+      if (!data.item) {
+        setStatus(data.error ?? "couldn't unfurl that");
+        setItems((prev) => prev.filter((i) => i.tempId !== tempId));
         return;
       }
-      const tempId = "tmp_" + Math.abs(hashStr(url + items.length));
-      // optimistic plop with a pending fallback card
-      setItems((prev) => {
-        if (prev.length >= MAX_ITEMS) {
-          setStatus(`9 is the cap`);
-          return prev;
-        }
-        const slot = SLOTS[prev.length % SLOTS.length];
-        const maxZ = prev.reduce((m, i) => Math.max(m, i.zIndex), 0);
-        const domain = safeDomain(url);
-        return [
-          ...prev,
-          {
-            itemId: tempId,
-            tempId,
-            pending: true,
-            item: {
-              id: tempId,
-              canonicalUrl: url,
-              title: domain,
-              imageUrl: null,
-              domain,
-              sourceType: "other",
-              unfurlStatus: "pending",
-            },
-            linerNote: null,
-            x: slot.x,
-            y: slot.y,
-            scale: 1,
-            rotation: slot.r,
-            zIndex: maxZ + 1,
-            inherited: false,
-          },
-        ];
-      });
-      setLinkInput("");
-      try {
-        const res = await fetch("/api/items/unfurl", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        if (res.status === 401) {
-          router.push("/login");
-          return;
-        }
-        const data = (await res.json()) as { item?: ItemView; error?: string };
-        if (!data.item) {
-          setStatus(data.error ?? "couldn't unfurl that");
-          setItems((prev) => prev.filter((i) => i.tempId !== tempId));
-          return;
-        }
-        // upgrade fallback → real item
-        setItems((prev) => {
-          const next = prev.map((i) =>
-            i.tempId === tempId
-              ? { ...i, itemId: data.item!.id, item: data.item!, pending: false, tempId: undefined }
-              : i,
-          );
-          scheduleSave({ items: next });
-          return next;
-        });
-        setStatus("plopped");
-      } catch {
-        setStatus("network hiccup — try again");
-        setItems((prev) => prev.filter((i) => i.tempId !== tempId));
-      }
-    },
-    [items.length, router, scheduleSave],
-  );
+      setItems((prev) =>
+        prev.map((i) =>
+          i.tempId === tempId
+            ? { ...i, itemId: data.item!.id, item: data.item!, pending: false, tempId: undefined }
+            : i,
+        ),
+      );
+      setStatus("plopped");
+    } catch {
+      setStatus("network hiccup — try again");
+      setItems((prev) => prev.filter((i) => i.tempId !== tempId));
+    }
+  }, []);
+
+  // shared-link plop on mount (from the share sheet)
+  const addedRef = useRef(false);
+  useEffect(() => {
+    if (initialAddUrl && !addedRef.current) {
+      addedRef.current = true;
+      addLink(initialAddUrl);
+    }
+  }, [initialAddUrl, addLink]);
 
   // paste anywhere → plop
   useEffect(() => {
@@ -238,7 +216,6 @@ export function ComposerClient({
 
   // ---------- drag ----------
   const dragState = useRef<{ id: string; moved: boolean } | null>(null);
-
   function onPointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -249,47 +226,27 @@ export function ComposerClient({
     const ds = dragState.current;
     if (!ds || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    let x = (e.clientX - rect.left) / rect.width;
-    let y = (e.clientY - rect.top) / rect.height;
-    x = snap(clamp01(x), [0.25, 0.5, 0.75]);
-    y = snap(clamp01(y), [0.33, 0.5, 0.67]);
+    const x = snap(clamp01((e.clientX - rect.left) / rect.width), [0.25, 0.5, 0.75]);
+    const y = snap(clamp01((e.clientY - rect.top) / rect.height), [0.33, 0.5, 0.67]);
     ds.moved = true;
-    setItems((prev) => {
-      const next = prev.map((i) =>
-        i.itemId === ds.id ? { ...i, x, y, inherited: false } : i,
-      );
-      return next;
-    });
+    setItems((prev) => prev.map((i) => (i.itemId === ds.id ? { ...i, x, y, inherited: false } : i)));
   }
   function onPointerUp() {
-    if (dragState.current?.moved) scheduleSave();
     dragState.current = null;
   }
 
-  // ---------- selected-item edits ----------
+  // ---------- selected edits ----------
   function updateSelected(patch: Partial<CItem>) {
-    setItems((prev) => {
-      const next = prev.map((i) =>
-        i.itemId === selected ? { ...i, ...patch, inherited: false } : i,
-      );
-      scheduleSave({ items: next });
-      return next;
-    });
+    setItems((prev) => prev.map((i) => (i.itemId === selected ? { ...i, ...patch, inherited: false } : i)));
   }
   function removeItem(id: string) {
-    const next = items.filter((i) => i.itemId !== id);
     if (selected === id) setSelected(null);
-    mutate(next);
+    setItems((prev) => prev.filter((i) => i.itemId !== id));
   }
   function bringToFront(id: string) {
-    const maxZ = items.reduce((m, i) => Math.max(m, i.zIndex), 0);
-    updateSelectedById(id, { zIndex: maxZ + 1 });
-  }
-  function updateSelectedById(id: string, patch: Partial<CItem>) {
     setItems((prev) => {
-      const next = prev.map((i) => (i.itemId === id ? { ...i, ...patch } : i));
-      scheduleSave({ items: next });
-      return next;
+      const maxZ = prev.reduce((m, i) => Math.max(m, i.zIndex), 0);
+      return prev.map((i) => (i.itemId === id ? { ...i, zIndex: maxZ + 1 } : i));
     });
   }
 
@@ -307,13 +264,23 @@ export function ComposerClient({
     }
     setPublishing(true);
     try {
-      // make sure the latest draft is saved before rendering
-      await fetch(`/api/packs/${initialPack.id}`, {
-        method: "PUT",
+      setStatus("rendering share images…");
+      const { toBlob } = await import("html-to-image");
+      const opts = { pixelRatio: 1, cacheBust: true, type: "image/webp" as const, quality: 0.9 };
+      const blob916 = frame916.current ? await toBlob(frame916.current, opts) : null;
+      const blob11 = frame11.current ? await toBlob(frame11.current, opts) : null;
+      const url916 = blob916 ? await uploadImage(blob916, "9x16") : undefined;
+      const url11 = blob11 ? await uploadImage(blob11, "1x1") : undefined;
+
+      setStatus("publishing…");
+      const res = await fetch("/api/packs", {
+        method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title,
-          dedicationRecipient: isDedication ? recipient : null,
+          authorName: authorName || null,
+          dedicationRecipient: recipient || null,
+          remixParentId: forkOf,
           items: solid.map((i, idx) => ({
             itemId: i.itemId,
             linerNote: i.linerNote,
@@ -322,25 +289,10 @@ export function ComposerClient({
             scale: i.scale,
             rotation: i.rotation,
             zIndex: i.zIndex || idx,
-            inherited: i.inherited,
           })),
+          image9x16: url916,
+          image1x1: url11,
         }),
-      });
-
-      setStatus("rendering share images…");
-      const { toBlob } = await import("html-to-image");
-      const opts = { pixelRatio: 1, cacheBust: true, type: "image/webp" as const, quality: 0.9 };
-      const blob916 = frame916.current ? await toBlob(frame916.current, opts) : null;
-      const blob11 = frame11.current ? await toBlob(frame11.current, opts) : null;
-
-      const url916 = blob916 ? await uploadImage(blob916, "9x16") : undefined;
-      const url11 = blob11 ? await uploadImage(blob11, "1x1") : undefined;
-
-      setStatus("publishing…");
-      const res = await fetch(`/api/packs/${initialPack.id}/publish`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image9x16: url916, image1x1: url11 }),
       });
       const data = (await res.json()) as { ok?: boolean; url?: string; error?: string };
       if (!res.ok || !data.ok) {
@@ -348,6 +300,9 @@ export function ComposerClient({
         setPublishing(false);
         return;
       }
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {}
       router.push(data.url!);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "publish failed");
@@ -361,46 +316,25 @@ export function ComposerClient({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      {/* ---------- left: title + canvas ---------- */}
+      {/* left: title + canvas */}
       <div className="space-y-4">
-        {/* title mad-lib */}
         <div className="ink-border tape-shadow bg-paper-2 px-4 py-4">
           <label className="mb-1 block text-xs font-bold uppercase tracking-widest text-ink-soft">
-            {isRemix ? "remix — rename it" : "title first · this is the punchline"}
+            {forkOf ? "forking — make it yours" : "title first · this is the punchline"}
           </label>
           <input
             value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              scheduleSave({ title: e.target.value });
-            }}
+            onChange={(e) => setTitle(e.target.value)}
             placeholder={`The ${GHOSTS[ghostIdx]} starter pack`}
             className="poster-title w-full bg-transparent text-2xl outline-none placeholder:text-ink-soft/50 sm:text-3xl"
           />
-          {isDedication ? (
-            <div className="mt-3 flex items-center gap-2">
-              <span className="font-note italic text-accent">made for</span>
-              <input
-                value={recipient}
-                onChange={(e) => {
-                  setRecipient(e.target.value);
-                  scheduleSave({ recipient: e.target.value });
-                }}
-                placeholder="@alex or a name"
-                className="border-b-[1.5px] border-ink bg-transparent px-1 py-0.5 outline-none"
-              />
-            </div>
-          ) : null}
         </div>
 
-        {/* add link */}
         <div className="flex gap-2">
           <input
             value={linkInput}
             onChange={(e) => setLinkInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addLink(linkInput);
-            }}
+            onKeyDown={(e) => e.key === "Enter" && addLink(linkInput)}
             placeholder="Paste a link (⌘V anywhere) — Spotify, a product, a video…"
             className="w-full border-[1.5px] border-ink bg-paper px-3 py-2 text-sm outline-none focus:bg-paper-2"
           />
@@ -409,7 +343,6 @@ export function ComposerClient({
           </button>
         </div>
 
-        {/* canvas */}
         <div
           ref={canvasRef}
           onPointerMove={onPointerMove}
@@ -463,7 +396,7 @@ export function ComposerClient({
         </p>
       </div>
 
-      {/* ---------- right: inspector + shelf + publish ---------- */}
+      {/* right: inspector + meta + publish */}
       <div className="space-y-4">
         <div className="ink-border bg-paper-2 px-4 py-4">
           <div className="flex items-center justify-between">
@@ -472,7 +405,6 @@ export function ComposerClient({
             </span>
             {status ? <span className="text-xs text-accent">{status}</span> : null}
           </div>
-
           {sel ? (
             <div className="mt-3 space-y-3">
               <div>
@@ -486,30 +418,13 @@ export function ComposerClient({
                   className="w-full border-[1.5px] border-ink bg-paper px-2 py-1.5 text-sm outline-none"
                 />
               </div>
-              <SliderRow
-                label="size"
-                min={0.6}
-                max={1.7}
-                step={0.05}
-                value={sel.scale}
-                onChange={(v) => updateSelected({ scale: v })}
-              />
-              <SliderRow
-                label="tilt"
-                min={-18}
-                max={18}
-                step={1}
-                value={sel.rotation}
-                onChange={(v) => updateSelected({ rotation: v })}
-              />
+              <SliderRow label="size" min={0.6} max={1.7} step={0.05} value={sel.scale} onChange={(v) => updateSelected({ scale: v })} />
+              <SliderRow label="tilt" min={-18} max={18} step={1} value={sel.rotation} onChange={(v) => updateSelected({ rotation: v })} />
               <div className="flex gap-2">
                 <button onClick={() => bringToFront(sel.itemId)} className="btn flex-1 !text-[0.7rem]">
                   Front
                 </button>
-                <button
-                  onClick={() => removeItem(sel.itemId)}
-                  className="btn flex-1 !text-[0.7rem] !bg-ink !text-paper"
-                >
+                <button onClick={() => removeItem(sel.itemId)} className="btn flex-1 !text-[0.7rem] !bg-ink !text-paper">
                   Remove
                 </button>
               </div>
@@ -521,60 +436,36 @@ export function ComposerClient({
           )}
         </div>
 
-        {/* shelf */}
-        {shelf.length > 0 ? (
-          <div className="ink-border bg-paper px-4 py-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-ink-soft">
-              your shelf · reuse
-            </p>
-            <div className="thin-scroll flex gap-2 overflow-x-auto pb-1">
-              {shelf.map((it) => (
-                <button
-                  key={it.id}
-                  onClick={() => addFromItemView(it)}
-                  className="w-24 shrink-0 text-left"
-                  title={it.title ?? it.canonicalUrl}
-                >
-                  <ItemCard item={it} width="100%" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        <div className="ink-border bg-paper px-4 py-3 space-y-2">
+          <input
+            value={authorName}
+            onChange={(e) => setAuthorName(e.target.value)}
+            placeholder="your name (optional)"
+            className="w-full border-b-[1.5px] border-ink bg-transparent px-1 py-1 text-sm outline-none"
+          />
+          <input
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="made for… (optional)"
+            className="w-full border-b-[1.5px] border-ink bg-transparent px-1 py-1 text-sm outline-none font-note italic"
+          />
+        </div>
 
-        <button
-          onClick={handlePublish}
-          disabled={publishing}
-          className="btn btn-accent btn-lg w-full"
-        >
-          {publishing ? "pressing…" : isDedication ? "Send it →" : "Publish pack →"}
+        <button onClick={handlePublish} disabled={publishing} className="btn btn-accent btn-lg w-full">
+          {publishing ? "pressing…" : "Publish & get link →"}
         </button>
         <p className="text-center text-[0.7rem] text-ink-soft">
-          the canvas is the share asset — what you see is what gets sent.
+          the canvas is the share asset — publishing gives you a link to share anywhere.
         </p>
       </div>
 
-      {/* ---------- offscreen render targets for share images ---------- */}
+      {/* offscreen render targets */}
       <div style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden>
         <div ref={frame916}>
-          <ShareFrame
-            title={title}
-            handle={initialPack.handle}
-            dedicationRecipient={isDedication ? recipient : null}
-            items={shareItems}
-            width={1080}
-            height={1920}
-          />
+          <ShareFrame title={title} authorName={authorName} dedicationRecipient={recipient} items={shareItems} width={1080} height={1920} />
         </div>
         <div ref={frame11}>
-          <ShareFrame
-            title={title}
-            handle={initialPack.handle}
-            dedicationRecipient={isDedication ? recipient : null}
-            items={shareItems}
-            width={1080}
-            height={1080}
-          />
+          <ShareFrame title={title} authorName={authorName} dedicationRecipient={recipient} items={shareItems} width={1080} height={1080} />
         </div>
       </div>
     </div>
@@ -599,15 +490,7 @@ function SliderRow({
   return (
     <label className="flex items-center gap-3 text-xs font-semibold uppercase text-ink-soft">
       <span className="w-8">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="flex-1 accent-[var(--accent)]"
-      />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="flex-1 accent-[var(--accent)]" />
     </label>
   );
 }

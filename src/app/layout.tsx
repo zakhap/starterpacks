@@ -2,20 +2,17 @@ import type { Metadata } from "next";
 import { Anton, Bricolage_Grotesque, Fraunces } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
-import { getCurrentUser } from "@/lib/auth";
 
 const anton = Anton({ weight: "400", variable: "--font-anton", subsets: ["latin"] });
 const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: ["latin"] });
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], style: ["italic", "normal"] });
 
 export const metadata: Metadata = {
-  title: "Packrat — make, remix, send starter packs",
-  description:
-    "The starter-pack meme as a native internet object. Make one, remix anyone's, send one to someone.",
+  title: "Packrat — make & fork starter packs",
+  description: "Make a starter pack, get a link, share it anywhere. Fork anyone's into your own.",
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
@@ -34,15 +31,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/compose" className="btn btn-accent">
                 + New pack
               </Link>
-              {user ? (
-                <Link href={`/@${user.handle}`} className="chip">
-                  @{user.handle}
-                </Link>
-              ) : (
-                <Link href="/login" className="btn">
-                  Sign in
-                </Link>
-              )}
             </nav>
           </div>
         </header>
