@@ -40,3 +40,5 @@ public/uploads/*
 # Test artifacts
 .playwright-mcp/
 *.jpeg
+
+*.tsbuildinfo
