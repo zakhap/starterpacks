@@ -21,11 +21,31 @@ const schema = z
     }
   });
 
-const parsed = schema.safeParse(process.env);
-if (!parsed.success) {
+type Env = z.infer<typeof schema>;
+
+function loadEnv(): Env {
+  const parsed = schema.safeParse(process.env);
+  if (parsed.success) return parsed.data;
+
+  // `next build` evaluates route modules to collect page data, WITHOUT the runtime env
+  // (no DB URL, no R2 keys). Don't crash the build — defer strict validation to runtime,
+  // where real requests always have the env injected by the host.
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return {
+      DATABASE_URL: process.env.DATABASE_URL ?? "",
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+      STORAGE_DRIVER: (process.env.STORAGE_DRIVER as Env["STORAGE_DRIVER"]) ?? "local",
+      R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+      R2_BUCKET: process.env.R2_BUCKET,
+      R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    };
+  }
+
   const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
   throw new Error(`Invalid environment configuration:\n${issues}\n\nSee .env.example.`);
 }
 
-export const env = parsed.data;
+export const env = loadEnv();
 export const APP_URL = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
