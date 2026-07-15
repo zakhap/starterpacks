@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 async function login(formData: FormData) {
   "use server";
   const handle = String(formData.get("handle") ?? "");
+  const nextRaw = String(formData.get("next") ?? "");
+  // only allow local redirects
+  const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
   try {
     await devLogin(handle);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not sign in";
-    redirect(`/login?error=${encodeURIComponent(msg)}`);
+    redirect(`/login?error=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`);
   }
-  redirect("/");
+  redirect(next);
 }
 
 export default async function LoginPage({
@@ -21,7 +24,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
   return (
     <div className="mx-auto max-w-md py-10">
       <div className="ink-border tape-shadow bg-paper-2 px-6 py-8 rot-3">
@@ -31,6 +34,7 @@ export default async function LoginPage({
           the local stand-in.)
         </p>
         <form action={login} className="mt-6 space-y-3">
+          <input type="hidden" name="next" value={next ?? "/"} />
           <div className="flex items-stretch">
             <span className="grid place-items-center border-[1.5px] border-r-0 border-ink bg-highlight px-3 font-bold">
               @

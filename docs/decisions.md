@@ -78,6 +78,16 @@ Consequences:
   links; only the *product-search adapter* is dropped. Spotify/YouTube handled via their
   own unfurl, not a search index.
 
+## 2026-07-15 — More resolutions
+
+- **Sent packs are public immediately** (E8-T2). A dedication publishes to the feed the moment
+  it's made; the send is a delivery notification, not a privacy gate. (Considered
+  recipient-first-then-public; chose simpler. Revisit if the "reveal" turns out to matter.)
+- **Share-sheet capture built** as the core mobile input (E4-T5): PWA `share_target` in the
+  manifest → `/compose/share` handler extracts the shared URL, creates a draft with it plopped,
+  and drops the user into the composer. iOS Safari does not support Web Share Target (documented
+  limitation) — paste remains the iOS fallback until native.
+
 ## 2026-07-14 — Accepted bets (flagged, deliberately not designed for v1)
 
 - **Inbound / return loop is unspecified.** The design optimizes outbound virality (the
